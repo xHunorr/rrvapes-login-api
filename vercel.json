@@ -6,6 +6,10 @@
     }
   },
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1.js" }
+    {
+      "src": "/api/(.*)",
+      "methods": ["GET", "POST", "OPTIONS", "HEAD"],
+      "dest": "/api/$1.js"
+    }
   ]
 }
