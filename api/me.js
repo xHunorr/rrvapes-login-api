@@ -55,6 +55,30 @@ export default async function handler(req, res) {
                     fulfillmentStatus
                     totalPriceV2 { amount currencyCode }
                     customerUrl
+
+                    # 🔥 itt a bővítés:
+                    lineItems(first: 20) {
+                      edges {
+                        node {
+                          title
+                          quantity
+                          originalTotalPrice {
+                            amount
+                            currencyCode
+                          }
+                          variant {
+                            title
+                            image {
+                              url
+                            }
+                            priceV2 {
+                              amount
+                              currencyCode
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
