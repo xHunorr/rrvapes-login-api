@@ -55,6 +55,28 @@ export default async function handler(req, res) {
                     fulfillmentStatus
                     totalPriceV2 { amount currencyCode }
                     customerUrl
+              
+                    lineItems(first: 20) {
+                      edges {
+                        node {
+                          title
+                          quantity
+                          originalUnitPrice {
+                            amount
+                            currencyCode
+                          }
+                          originalTotalPrice {
+                            amount
+                            currencyCode
+                          }
+                          variant {
+                            image {
+                              url
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
