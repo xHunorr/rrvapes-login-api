@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     const { token } = req.body || {};
     if (!token) return res.status(400).json({ error: "Missing token." });
 
-    const resp = await fetch("https://rrvapes.myshopify.com/api/2025-01/graphql.json", {
+    const resp = await fetch("https://rrvapes.com/api/2024-07/graphql.json", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -44,7 +44,6 @@ export default async function handler(req, res) {
               lastName
               email
               acceptsMarketing
-
               orders(first: 20, reverse: true) {
                 edges {
                   node {
@@ -56,27 +55,9 @@ export default async function handler(req, res) {
                     fulfillmentStatus
                     totalPriceV2 { amount currencyCode }
                     customerUrl
-                    lineItems(first: 20) {
-                      edges {
-                        node {
-                          title
-                          quantity
-                          variant {
-                            priceV2 {
-                              amount
-                              currencyCode
-                            }
-                            image {
-                              url
-                            }
-                          }
-                        }
-                      }
-                    }
                   }
                 }
               }
-
               addresses(first: 10) {
                 edges {
                   node {
@@ -101,24 +82,10 @@ export default async function handler(req, res) {
     });
 
     const data = await resp.json();
-
-    // 🔍 LOG A SHOPIFY VÁLASZHOZ
-    console.log("Shopify response:", JSON.stringify(data, null, 2));
-
-    // ⚠️ Ha a válaszban hiba van, írjuk ki
-    if (data.errors) {
-      console.error("Shopify GraphQL Errors:", data.errors);
-      return res.status(500).json({ error: "Shopify GraphQL error", details: data.errors });
-    }
-
     const customer = data?.data?.customer || null;
-    if (!customer) {
-      console.error("No customer returned from Shopify. Raw data:", data);
-      return res.status(401).json({ error: "Invalid or expired token." });
-    }
+    if (!customer) return res.status(401).json({ error: "Invalid or expired token." });
 
     return res.status(200).json({ success: true, customer });
-
   } catch (e) {
     console.error("ME API error:", e);
     return res.status(500).json({ error: "Server error." });
