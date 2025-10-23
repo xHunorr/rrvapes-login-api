@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     const { token } = req.body || {};
     if (!token) return res.status(400).json({ error: "Missing token." });
 
-    const resp = await fetch("https://rrvapes.myshopify.com/api/2025-01/graphql.json", {
+    const resp = await fetch("https://rrvapes.com/api/2024-07/graphql.json", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
