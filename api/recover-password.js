@@ -21,6 +21,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log("🔍 DEBUG:", process.env.SHOPIFY_DOMAIN, process.env.SHOPIFY_STOREFRONT_TOKEN ? "✅ token ok" : "❌ token missing");
+
     // ✅ Shopify Storefront API hívás
     const response = await fetch(`https://${process.env.SHOPIFY_DOMAIN}/api/2024-07/graphql.json`, {
       method: 'POST',
