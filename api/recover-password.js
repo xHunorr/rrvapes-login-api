@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     console.log("🔍 Shopify domain:", process.env.SHOPIFY_DOMAIN);
     console.log("🔍 Has token:", !!process.env.SHOPIFY_STOREFRONT_TOKEN);
 
-    const response = await fetch(`https://${process.env.SHOPIFY_DOMAIN}/api/2024-07/graphql.json`, {
+    const response = await fetch(`https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -24,10 +24,7 @@ export default async function handler(req, res) {
         query: `
           mutation customerRecover($email: String!) {
             customerRecover(email: $email) {
-              userErrors {
-                field
-                message
-              }
+              userErrors { field message }
             }
           }
         `,
