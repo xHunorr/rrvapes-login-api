@@ -1,92 +1,96 @@
-// /api/recover-password.js
 export default async function handler(req, res) {
-  // --- CORS (engedjük a www-t is) ---
+  // --- CORS ---
   const origin = req.headers.origin || "";
   const allowed = ["https://rrvapes.com", "https://www.rrvapes.com"];
-  if (allowed.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", allowed[0]);
-  }
+  res.setHeader("Access-Control-Allow-Origin", allowed.includes(origin) ? origin : allowed[0]);
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-  if (req.method !== "POST") {
-    return res.status(405).json({ success: false, message: "Method not allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ success: false });
 
   const { email, locale } = req.body || {};
+  if (!email) return res.status(400).json({ success: false, message: "Email missing" });
 
-  if (!email || typeof email !== "string") {
-    return res.status(400).json({ success: false, message: "Email is required" });
-  }
-
-  // ✅ Nyelv fallback, ha valami hülyeség jönne
   const selectedLocale = ["hu", "en", "sk"].includes(locale) ? locale : "hu";
 
+  const adminUrl = process.env.SHOPIFY_ADMIN_API_URL;
+  const adminToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
+
+  const storefrontUrl = `https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/${process.env.SHOPIFY_API_VERSION}/graphql.json`;
+  const storefrontToken = process.env.SHOPIFY_STOREFRONT_TOKEN;
+
   try {
-    const storeDomain = process.env.SHOPIFY_STOREFRONT_DOMAIN;
-    const version = process.env.SHOPIFY_API_VERSION || "2024-07";
-    const token = process.env.SHOPIFY_STOREFRONT_TOKEN;
-
-    if (!storeDomain || !token) {
-      return res.status(500).json({ success: false, message: "Shop config missing" });
-    }
-
-    const endpoint = `https://${storeDomain}/api/${version}/graphql.json`;
-
-    const gql = `
-      mutation customerRecover($email: String!) {
-        customerRecover(email: $email) {
-          userErrors {
-            field
-            message
+    // 1) Customer ID lekérése email alapján (Admin API)
+    const searchQuery = `
+      {
+        customers(query: "email:${email}", first: 1) {
+          edges {
+            node { id }
           }
         }
       }
     `;
 
-    const response = await fetch(endpoint, {
+    const searchRes = await fetch(adminUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-
-        // ✅ Shopify API auth
-        "X-Shopify-Storefront-Access-Token": token,
-
-        // ✅ *** EZ CSINÁLJA MEG A HELYES NYELVŰ EMAILT ***
-        "X-Shopify-Storefront-Locale": selectedLocale,
+        "X-Shopify-Access-Token": adminToken,
       },
-      body: JSON.stringify({ query: gql, variables: { email: email.trim() } }),
+      body: JSON.stringify({ query: searchQuery })
     });
 
-    const raw = await response.text();
-    console.log("🧾 Shopify raw:", raw);
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      return res.status(502).json({ success: false, message: "Bad JSON from Shopify" });
+    const searchData = await searchRes.json();
+    const customerId = searchData?.data?.customers?.edges?.[0]?.node?.id;
+    if (!customerId) {
+      return res.status(200).json({ success: true }); // nem áruljuk el, létezik-e
     }
 
-    if (Array.isArray(data.errors) && data.errors.length) {
-      const msg = data.errors[0]?.message || "Shopify error";
-      return res.status(400).json({ success: false, message: msg });
-    }
+    // 2) Locale frissítés (Admin API)
+    const updateMutation = `
+      mutation updateCustomer($id: ID!, $locale: String!) {
+        customerUpdate(input: {id: $id, locale: $locale}) {
+          customer { id }
+          userErrors { message }
+        }
+      }
+    `;
 
-    const userErrors = data?.data?.customerRecover?.userErrors || [];
-    if (userErrors.length) {
-      return res.status(400).json({ success: false, message: userErrors[0].message || "Recover error" });
-    }
+    await fetch(adminUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": adminToken,
+      },
+      body: JSON.stringify({
+        query: updateMutation,
+        variables: { id: customerId, locale: selectedLocale }
+      })
+    });
 
-    return res.status(200).json({ success: true, message: "Password recovery email sent" });
+    // 3) Jelszó visszaállítás elindítása (Storefront API)
+    const recoverMutation = `
+      mutation customerRecover($email: String!) {
+        customerRecover(email: $email) {
+          userErrors { message }
+        }
+      }
+    `;
+
+    await fetch(storefrontUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Storefront-Access-Token": storefrontToken
+      },
+      body: JSON.stringify({ query: recoverMutation, variables: { email } })
+    });
+
+    return res.status(200).json({ success: true });
 
   } catch (err) {
-    console.error("❌ Recover error:", err);
-    return res.status(500).json({ success: false, message: "Server error" });
+    console.error("Recover error:", err);
+    return res.status(500).json({ success: false });
   }
 }
