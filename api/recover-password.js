@@ -23,12 +23,12 @@ export default async function handler(req, res) {
     console.log("🔍 Has token:", !!process.env.SHOPIFY_STOREFRONT_TOKEN);
 
     const response = await fetch(
-      `https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json`,
+      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2024-07/graphql.json`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Shopify-Storefront-Access-Token': process.env.SHOPIFY_STOREFRONT_TOKEN,
+          'X-Shopify-Access-Token': process.env.SHOPIFY_ADMIN_ACCESS_TOKEN,
         },
         body: JSON.stringify({
           query: `
@@ -45,6 +45,7 @@ export default async function handler(req, res) {
         }),
       }
     );
+
 
     const text = await response.text();
     console.log("🧾 Shopify response raw:", text);
