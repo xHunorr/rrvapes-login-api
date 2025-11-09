@@ -1,17 +1,9 @@
+// /api/recover-password.js
+
 export default async function handler(req, res) {
   // --- CORS ---
-  const allowedOrigins = [
-    'https://rrvapes.com',
-    'https://www.rrvapes.com',
-    'http://localhost:3000'
-  ];
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    // ha nem ismert az origin, inkább ne engedjük
-    res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
-  }
+  // Ha több domained van (www. is), add hozzá mindkettőt vagy használj * ideiglenesen tesztre
+  res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -27,27 +19,22 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, message: 'Email is required' });
   }
 
-  // --- kötelező env-k ellenőrzése ---
-  const apiVersion = process.env.SHOPIFY_API_VERSION || '2024-07';
-  const storefrontDomain = process.env.SHOPIFY_STOREFRONT_DOMAIN; // pl. rrvapes.myshopify.com
-  const storefrontToken = process.env.SHOPIFY_STOREFRONT_TOKEN;
-
-  if (!storefrontDomain || !storefrontToken) {
-    console.error('Missing Storefront envs', { storefrontDomain: !!storefrontDomain, storefrontToken: !!storefrontToken });
-    return res.status(500).json({ success: false, message: 'Server misconfiguration' });
-  }
-
-  const endpoint = `https://${storefrontDomain}/api/${apiVersion}/graphql.json`;
-
   try {
-    console.log('🔍 Recover for:', email);
-    console.log('🔗 Endpoint:', endpoint);
+    const storeDomain = process.env.SHOPIFY_STOREFRONT_DOMAIN; // pl. rrvapes.myshopify.com
+    const apiVersion = process.env.SHOPIFY_API_VERSION || '2024-07';
+    const token = process.env.SHOPIFY_STOREFRONT_TOKEN;
+
+    if (!storeDomain || !token) {
+      return res.status(500).json({ success: false, message: 'Missing Shopify env vars' });
+    }
+
+    const endpoint = `https://${storeDomain}/api/${apiVersion}/graphql.json`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Storefront-Access-Token': storefrontToken,
+        'X-Shopify-Storefront-Access-Token': token,
       },
       body: JSON.stringify({
         query: `
@@ -65,28 +52,30 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
+    console.log('🧾 Shopify HTTP:', response.status);
     console.log('🧾 Shopify raw:', text);
 
     let data;
     try {
       data = JSON.parse(text);
-    } catch (e) {
-      return res.status(502).json({ success: false, message: 'Bad response from Shopify' });
+    } catch {
+      return res.status(502).json({ success: false, message: 'Bad JSON from Shopify' });
     }
 
-    // 1) top-level GraphQL errors (ilyenkor jött a „Not Found”)
+    // 1) TOP-LEVEL GraphQL errors (pl. "Not Found") → ez volt a piros hiba
     if (Array.isArray(data.errors) && data.errors.length) {
       const msg = data.errors[0]?.message || 'Shopify error';
       return res.status(400).json({ success: false, message: msg });
     }
 
-    // 2) mutation userErrors
-    const userErrors = data?.data?.customerRecover?.userErrors;
-    if (Array.isArray(userErrors) && userErrors.length) {
-      return res.status(400).json({ success: false, message: userErrors[0]?.message || 'Request error' });
+    // 2) userErrors a mutáció alatt
+    const userErrors = data?.data?.customerRecover?.userErrors || [];
+    if (userErrors.length) {
+      return res.status(400).json({ success: false, message: userErrors[0]?.message || 'User error' });
     }
 
-    // 3) minden oké – fontos: Shopify akkor is "sikerrel" tér vissza, ha az email nem létezik
+    // Ha idáig eljutottunk: Shopify elfogadta a kérést.
+    // (Biztonsági okból akkor is sikerrel tér vissza, ha az email nem létezik.)
     return res.status(200).json({ success: true, message: 'Password recovery email sent' });
 
   } catch (err) {
