@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // --- CORS ---
   const origin = req.headers.origin || "";
   const allowed = ["https://rrvapes.com", "https://www.rrvapes.com"];
   res.setHeader("Access-Control-Allow-Origin", allowed.includes(origin) ? origin : allowed[0]);
@@ -14,14 +13,14 @@ export default async function handler(req, res) {
 
   const selectedLocale = ["hu", "en", "sk"].includes(locale) ? locale : "hu";
 
-  const adminUrl = process.env.SHOPIFY_ADMIN_API_URL;
-  const adminToken = process.env.SHOPIFY_ADMIN_API_TOKEN;
+  const adminUrl = `https://${process.env.SHOPIFY_ADMIN_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/graphql.json`;
+  const adminToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 
   const storefrontUrl = `https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/${process.env.SHOPIFY_API_VERSION}/graphql.json`;
   const storefrontToken = process.env.SHOPIFY_STOREFRONT_TOKEN;
 
   try {
-    // 1) Customer ID lekérése email alapján (Admin API)
+    // 1) Customer ID lekérése email alapján
     const searchQuery = `
       {
         customers(query: "email:${email}", first: 1) {
@@ -43,11 +42,9 @@ export default async function handler(req, res) {
 
     const searchData = await searchRes.json();
     const customerId = searchData?.data?.customers?.edges?.[0]?.node?.id;
-    if (!customerId) {
-      return res.status(200).json({ success: true }); // nem áruljuk el, létezik-e
-    }
+    if (!customerId) return res.status(200).json({ success: true });
 
-    // 2) Locale frissítés (Admin API)
+    // 2) Locale frissítés
     const updateMutation = `
       mutation updateCustomer($id: ID!, $locale: String!) {
         customerUpdate(input: {id: $id, locale: $locale}) {
@@ -69,7 +66,7 @@ export default async function handler(req, res) {
       })
     });
 
-    // 3) Jelszó visszaállítás elindítása (Storefront API)
+    // 3) Reset email indítása
     const recoverMutation = `
       mutation customerRecover($email: String!) {
         customerRecover(email: $email) {
