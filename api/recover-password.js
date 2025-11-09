@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     console.log("🔍 Incoming email:", email);
 
     const response = await fetch(
-      `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2024-07/graphql.json`,
+      `https://${process.env.SHOPIFY_ADMIN_DOMAIN}/admin/api/2024-07/graphql.json`,
       {
         method: 'POST',
         headers: {
