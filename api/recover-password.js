@@ -9,9 +9,10 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ success: false });
 
   const { email, locale } = req.body || {};
-  if (!email) return res.status(400).json({ success: false, message: "Email missing" });
+  if (!email) return res.status(400).json({ success: false });
 
-  const selectedLocale = ["hu", "en", "sk"].includes(locale) ? locale : "hu";
+  const map = { hu: "HU", en: "EN", sk: "SK" };
+  const selectedLocale = map[locale] || "HU";
 
   const adminUrl = `https://${process.env.SHOPIFY_ADMIN_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/graphql.json`;
   const adminToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
@@ -20,23 +21,17 @@ export default async function handler(req, res) {
   const storefrontToken = process.env.SHOPIFY_STOREFRONT_TOKEN;
 
   try {
-    // 1) Customer ID lekérése email alapján
     const searchQuery = `
       {
-        customers(query: "email:${email}", first: 1) {
-          edges {
-            node { id }
-          }
+        customers(query: "email:\\"${email}\\"", first: 1) {
+          edges { node { id } }
         }
       }
     `;
 
     const searchRes = await fetch(adminUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": adminToken,
-      },
+      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": adminToken },
       body: JSON.stringify({ query: searchQuery })
     });
 
@@ -44,50 +39,41 @@ export default async function handler(req, res) {
     const customerId = searchData?.data?.customers?.edges?.[0]?.node?.id;
     if (!customerId) return res.status(200).json({ success: true });
 
-    // 2) Locale frissítés
     const updateMutation = `
-      mutation updateCustomer($id: ID!, $locale: String!) {
-        customerUpdate(input: {id: $id, locale: $locale}) {
-          customer { id }
+      mutation updateCustomer($id: ID!, $locale: LanguageCode!) {
+        customerUpdate(input: {id: $id, languageCode: $locale}) {
+          customer { id languageCode }
           userErrors { message }
         }
       }
     `;
 
-    await fetch(adminUrl, {
+    const updateRes = await fetch(adminUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": adminToken,
-      },
-      body: JSON.stringify({
-        query: updateMutation,
-        variables: { id: customerId, locale: selectedLocale }
-      })
+      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": adminToken },
+      body: JSON.stringify({ query: updateMutation, variables: { id: customerId, locale: selectedLocale } })
     });
 
-    // 3) Reset email indítása
+    const updateData = await updateRes.json();
+    if (updateData.data.customerUpdate.userErrors.length) {
+      console.log("Locale update error:", updateData.data.customerUpdate.userErrors);
+    }
+
     const recoverMutation = `
       mutation customerRecover($email: String!) {
-        customerRecover(email: $email) {
-          userErrors { message }
-        }
+        customerRecover(email: $email) { userErrors { message } }
       }
     `;
 
     await fetch(storefrontUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": storefrontToken
-      },
+      headers: { "Content-Type": "application/json", "X-Shopify-Storefront-Access-Token": storefrontToken },
       body: JSON.stringify({ query: recoverMutation, variables: { email } })
     });
 
     return res.status(200).json({ success: true });
-
   } catch (err) {
-    console.error("Recover error:", err);
+    console.error(err);
     return res.status(500).json({ success: false });
   }
 }
