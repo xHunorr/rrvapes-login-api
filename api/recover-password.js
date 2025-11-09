@@ -12,109 +12,105 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ success: false, message: "Method not allowed" });
 
   const { email, locale } = req.body || {};
-
   if (!email || typeof email !== "string") {
     return res.status(400).json({ success: false, message: "Email is required" });
   }
 
-  // ✅ Nyelv map Shopify számára
-  const localeMap = { hu: "HU", en: "EN", sk: "SK" };
-  const selectedLocale = localeMap[locale] || "HU";
+  // nyelv kiválasztás (ha valami hülyeség jön → default HU)
+  const selectedLocale = ["hu", "en", "sk"].includes(locale) ? locale : "hu";
+
+  // ENV
+  const storefrontDomain = process.env.SHOPIFY_STOREFRONT_DOMAIN;
+  const adminDomain = process.env.SHOPIFY_ADMIN_DOMAIN;
+  const version = process.env.SHOPIFY_API_VERSION || "2024-07";
+  const storefrontToken = process.env.SHOPIFY_STOREFRONT_TOKEN;
+  const adminToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+
+  if (!storefrontDomain || !storefrontToken || !adminDomain || !adminToken) {
+    return res.status(500).json({ success: false, message: "Shop config missing" });
+  }
+
+  const adminUrl = `https://${adminDomain}/admin/api/${version}/graphql.json`;
+  const storefrontUrl = `https://${storefrontDomain}/api/${version}/graphql.json`;
 
   try {
-    //
-    // 1️⃣ CUSTOMER LANGUAGE UPDATE (ADMIN API)
-    //
-    const adminToken = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
-    const adminUrl = `https://${process.env.SHOPIFY_ADMIN_DOMAIN}/admin/api/${process.env.SHOPIFY_API_VERSION}/graphql.json`;
-
-    // Lekérjük a customer ID-t email alapján
-    const findCustomerQuery = `
+    // 1) Customer ID lekérése email alapján
+    const findQuery = `
       {
-        customers(query: "email:\\"${email}\\"", first: 1) {
-          edges { node { id } }
+        customers(query: "email:${email}", first: 1) {
+          edges {
+            node { id }
+          }
         }
       }
     `;
 
-    const findResponse = await fetch(adminUrl, {
+    const findRes = await fetch(adminUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Access-Token": adminToken
+        "X-Shopify-Access-Token": adminToken,
       },
-      body: JSON.stringify({ query: findCustomerQuery })
+      body: JSON.stringify({ query: findQuery })
     });
 
-    const findData = await findResponse.json();
+    const findData = await findRes.json();
     const customerId = findData?.data?.customers?.edges?.[0]?.node?.id;
 
-    // Ha létezik a user → frissítjük a nyelvét
-    if (customerId) {
-      const updateLocaleMutation = `
-        mutation updateCustomer($id: ID!, $languageCode: LanguageCode!) {
-          customerUpdate(input: {id: $id, languageCode: $languageCode}) {
-            customer { id languageCode }
-            userErrors { message }
-          }
-        }
-      `;
-
-      await fetch(adminUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Shopify-Access-Token": adminToken
-        },
-        body: JSON.stringify({
-          query: updateLocaleMutation,
-          variables: { id: customerId, languageCode: selectedLocale }
-        })
-      });
+    // ha nincs fiók → direkt ugyanazt válaszoljuk (biztonság)
+    if (!customerId) {
+      return res.status(200).json({ success: true, message: "Password recovery email sent" });
     }
 
-    //
-    // 2️⃣ PASSWORD RESET EMAIL (Storefront API)
-    //
-    const storeDomain = process.env.SHOPIFY_STOREFRONT_DOMAIN;
-    const version = process.env.SHOPIFY_API_VERSION || "2024-07";
-    const token = process.env.SHOPIFY_STOREFRONT_TOKEN;
-
-    const endpoint = `https://${storeDomain}/api/${version}/graphql.json`;
-
-    const gql = `
-      mutation customerRecover($email: String!) {
-        customerRecover(email: $email) {
-          userErrors {
-            field
-            message
-          }
+    // 2) Nyelv frissítés a customer profilhoz
+    const updateMutation = `
+      mutation updateCustomer($id: ID!, $locale: String!) {
+        customerUpdate(input: { id: $id, locale: $locale }) {
+          customer { id }
         }
       }
     `;
 
-    const response = await fetch(endpoint, {
+    await fetch(adminUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": token,
+        "X-Shopify-Access-Token": adminToken,
       },
-      body: JSON.stringify({ query: gql, variables: { email: email.trim() } }),
+      body: JSON.stringify({
+        query: updateMutation,
+        variables: { id: customerId, locale: selectedLocale }
+      })
+    });
+
+    // 3) E-mail kiküldése
+    const recoverMutation = `
+      mutation customerRecover($email: String!) {
+        customerRecover(email: $email) {
+          userErrors { message }
+        }
+      }
+    `;
+
+    const response = await fetch(storefrontUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Storefront-Access-Token": storefrontToken,
+      },
+      body: JSON.stringify({ query: recoverMutation, variables: { email: email.trim() } }),
     });
 
     const raw = await response.text();
     let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      return res.status(502).json({ success: false, message: "Bad JSON from Shopify" });
-    }
+    try { data = JSON.parse(raw); } catch {}
 
     const userErrors = data?.data?.customerRecover?.userErrors || [];
     if (userErrors.length) {
-      return res.status(400).json({ success: false, message: userErrors[0].message || "Recover error" });
+      return res.status(400).json({ success: false, message: userErrors[0].message });
     }
 
+    // KÉSZ → e-mail elküldve
     return res.status(200).json({ success: true, message: "Password recovery email sent" });
 
   } catch (err) {
