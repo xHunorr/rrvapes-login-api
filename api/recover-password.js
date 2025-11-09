@@ -1,17 +1,13 @@
 export default async function handler(req, res) {
-  // --- CORS ---
-  const origin = req.headers.origin || "";
-  const allowedOrigins = ["https://rrvapes.com", "https://www.rrvapes.com"];
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-  res.setHeader("Vary", "Origin");
+  // CORS – az oldaladról engedjük
+  res.setHeader("Access-Control-Allow-Origin", "https://rrvapes.com");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
+
   if (req.method !== "POST") {
     return res.status(405).json({ success: false, message: "Method not allowed" });
   }
@@ -22,25 +18,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // --- ENV-ek ---
-    const storeDomain = process.env.SHOPIFY_STOREFRONT_DOMAIN; // pl. rrvapes.myshopify.com
     const apiVersion = process.env.SHOPIFY_API_VERSION || "2024-07";
-    const storefrontToken = process.env.SHOPIFY_STOREFRONT_TOKEN;
+    const endpoint = `https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/${apiVersion}/graphql.json`;
 
-    if (!storeDomain || !storefrontToken) {
-      return res.status(500).json({
-        success: false,
-        message: "Shopify Storefront env hiányzik (domain vagy token)."
-      });
-    }
-
-    const endpoint = `https://${storeDomain}/api/${apiVersion}/graphql.json`;
+    // csak diagnosztika (nem logolunk tokent)
+    console.log("🔗 Hívott endpoint:", endpoint);
+    console.log("🔐 Van-e Storefront token:", !!process.env.SHOPIFY_STOREFRONT_TOKEN);
 
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": storefrontToken,
+        "X-Shopify-Storefront-Access-Token": process.env.SHOPIFY_STOREFRONT_TOKEN,
       },
       body: JSON.stringify({
         query: `
@@ -58,8 +47,7 @@ export default async function handler(req, res) {
     });
 
     const text = await response.text();
-    console.log("🧾 Shopify HTTP status:", response.status);
-    console.log("🧾 Shopify response raw:", text);
+    console.log("🧾 Shopify raw:", text);
 
     let data;
     try {
@@ -68,19 +56,25 @@ export default async function handler(req, res) {
       return res.status(502).json({ success: false, message: "Bad JSON from Shopify" });
     }
 
-    // Top-level GraphQL hibák (pl. Not Found)
+    // HTTP hiba?
+    if (!response.ok) {
+      const msg = data?.errors?.[0]?.message || response.statusText || "Shopify error";
+      return res.status(response.status).json({ success: false, message: msg });
+    }
+
+    // GraphQL top-level errors?
     if (Array.isArray(data.errors) && data.errors.length) {
       const msg = data.errors[0]?.message || "Shopify error";
       return res.status(400).json({ success: false, message: msg });
     }
 
-    // Mutáció userErrors
-    const userErrors = data?.data?.customerRecover?.userErrors || [];
-    if (userErrors.length) {
+    // userErrors a mutation alatt?
+    const userErrors = data?.data?.customerRecover?.userErrors;
+    if (userErrors && userErrors.length) {
       return res.status(400).json({ success: false, message: userErrors[0].message });
     }
 
-    // Siker (Shopify akkor is 200-at adhat, ha nem árulja el, hogy létezik-e az e-mail)
+    // Ha idáig eljutottunk: a request elfogadva. (Shopify akkor is "siker", ha az email nem létezik.)
     return res.status(200).json({ success: true, message: "Password recovery email sent" });
   } catch (err) {
     console.error("❌ Recover error:", err);
