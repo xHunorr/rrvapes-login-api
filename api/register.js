@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
   try {
     // 🆕 Shopify customerCreate
-    const createResp = await fetch("https://rrvapes.com/api/2024-07/graphql.json", {
+    const createResp = await fetch("https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -70,7 +70,7 @@ export default async function handler(req, res) {
     }
 
     // ✅ Ha létrejött a fiók, automatikusan kérünk hozzá accessToken-t
-    const tokenResp = await fetch("https://rrvapes.com/api/2024-07/graphql.json", {
+    const tokenResp = await fetch("https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
