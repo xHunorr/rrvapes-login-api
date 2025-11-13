@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     }
 
     // 1) Token a jelenlegi adatokkal
-    const tokenResp = await fetch("https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json", {
+    const tokenResp = await fetch(`https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
     }
 
     // 2) customerUpdate a friss tokennel
-    const updateResp = await fetch("https://rrvapes.com/api/2024-07/graphql.json", {
+    const updateResp = await fetch(`https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
