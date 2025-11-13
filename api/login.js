@@ -43,7 +43,7 @@ export default async function handler(req, res) {
 
   try {
     // 🔐 Shopify Storefront: tokenkérés
-    const resp = await fetch("https://rrvapes.com/api/2024-07/graphql.json", {
+    const resp = await fetch("https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
