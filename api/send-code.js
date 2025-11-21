@@ -4,7 +4,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export const codes = new Map();
 
 export default async function handler(req, res) {
-  // Preflight
+  // ✅ CORS HEADERS – EZ HIÁNYZOTT NÁLAD
+  res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // ✅ Preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -58,9 +63,9 @@ export default async function handler(req, res) {
       `
     });
 
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Email send failed' });
+    return res.status(500).json({ error: 'Email send failed' });
   }
 }
