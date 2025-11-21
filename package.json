@@ -1,15 +1,18 @@
 {
   "name": "rrvapes-login-api",
   "version": "1.0.0",
-  "private": true,
+  "main": "api/index.js",
   "type": "module",
+  "scripts": {
+    "start": "node api/index.js"
+  },
   "dependencies": {
-    "express": "^5.1.0",
+    "express": "^4.19.2",
     "resend": "^3.5.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.5",
-    "@types/node": "^24.10.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@types/node": "^22.0.0",
+    "@types/express": "^4.17.21"
   }
 }
