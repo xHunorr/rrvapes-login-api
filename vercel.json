@@ -1,14 +1,19 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.js": {
+    "api/*.js": {
       "runtime": "@vercel/node@1.14.1"
     }
   },
   "routes": [
     {
-      "src": "/api/(.*)",
-      "methods": ["GET", "POST", "OPTIONS", "HEAD"],
+      "src": "^/api/(.*)$",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "headers": {
+        "Access-Control-Allow-Origin": "https://rrvapes.com",
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      },
       "dest": "/api/$1.js"
     }
   ]
