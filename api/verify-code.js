@@ -1,10 +1,13 @@
 import { codes } from './send-code';
 
-export default function handler(req, res) {
-  // ✅ CORS
+function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+export default function handler(req, res) {
+  setCors(res);
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -14,23 +17,34 @@ export default function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { email, code } = req.body;
+  let body = req.body;
+
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      return res.status(400).json({ success: false });
+    }
+  }
+
+  const { email, code } = body || {};
+
   const saved = codes.get(email);
 
   if (!saved) {
-    return res.status(400).json({ success: false, message: 'Nincs aktív kód' });
+    return res.status(400).json({ success: false });
   }
 
   if (Date.now() > saved.expires) {
     codes.delete(email);
-    return res.status(400).json({ success: false, message: 'Lejárt kód' });
+    return res.status(400).json({ success: false });
   }
 
   if (saved.code !== code) {
-    return res.status(400).json({ success: false, message: 'Hibás kód' });
+    return res.status(400).json({ success: false });
   }
 
   codes.delete(email);
 
-  res.status(200).json({ success: true });
+  return res.status(200).json({ success: true });
 }
