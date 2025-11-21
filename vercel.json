@@ -2,26 +2,13 @@
   "version": 2,
   "functions": {
     "api/*.js": {
-      "runtime": "@vercel/node@1.14.1"
+      "runtime": "nodejs18.x"
     }
   },
-  "headers": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://rrvapes.com"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET,POST,OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type"
-        }
-      ]
+      "src": "^/api/(.*)$",
+      "dest": "/api/$1.js"
     }
   ]
 }
