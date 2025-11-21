@@ -1,44 +1,25 @@
-import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// globális Map kódoknak
-const codes = global.codes || new Map();
-global.codes = codes;
-
 export default async function handler(req, res) {
+  // ✅ CORS
+  res.setHeader("Access-Control-Allow-Origin", "https://rrvapes.com");
+  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
-    // ✅ CORS HEADERS – EZ KELL A SHOPIFY-NAK
-    res.setHeader("Access-Control-Allow-Origin", "https://rrvapes.com");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-    // ✅ Preflight
-    if (req.method === "OPTIONS") {
-      return res.status(200).end();
-    }
-
-    // ✅ Ha valaki GET-tel nyitja meg böngészőből
-    if (req.method === "GET") {
-      return res.status(200).json({ ok: true, message: "API alive" });
-    }
-
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
-    const { email, locale } = req.body;
+    const { email, locale } = req.body || {};
 
     if (!email) {
       return res.status(400).json({ error: "Missing email" });
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    codes.set(email, {
-      code,
-      expires: Date.now() + 10 * 60 * 1000
-    });
 
     let subject = "Password reset code";
     let title = "Password reset code";
@@ -49,32 +30,46 @@ export default async function handler(req, res) {
       title = "Jelszó visszaállító kód";
       text = "Használd az alábbi kódot:";
     }
+
     if (locale === "sk") {
       subject = "Kód na obnovenie hesla";
       title = "Kód na obnovenie hesla";
       text = "Použi nasledujúci kód:";
     }
 
-    await resend.emails.send({
-      from: "RR Vapes <no-reply@rrvapes.com>",
-      to: email,
-      subject,
-      html: `
-        <div style="font-family: Arial; text-align: center; padding: 30px;">
-          <h2>${title}</h2>
-          <p>${text}</p>
-          <div style="font-size: 32px; letter-spacing: 6px; font-weight: bold; margin: 20px 0;">
-            ${code}
+    const send = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.RESEND_API_KEY}`
+      },
+      body: JSON.stringify({
+        from: "RR Vapes <no-reply@rrvapes.com>",
+        to: email,
+        subject,
+        html: `
+          <div style="font-family: Arial; text-align: center; padding: 30px;">
+            <h2>${title}</h2>
+            <p>${text}</p>
+            <div style="font-size: 32px; letter-spacing: 6px; font-weight: bold;">
+              ${code}
+            </div>
+            <p>10 percig érvényes.</p>
           </div>
-          <p>10 percig érvényes.</p>
-        </div>
-      `
+        `
+      })
     });
 
-    return res.status(200).json({ success: true });
+    const result = await send.json();
 
+    if (!send.ok) {
+      console.error("RESEND ERROR:", result);
+      return res.status(500).json({ error: "Resend API failed" });
+    }
+
+    return res.status(200).json({ success: true });
   } catch (err) {
-    console.error("SEND CODE ERROR:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("CRASH:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 }
