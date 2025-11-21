@@ -4,5 +4,12 @@
     "api/**/*.js": {
       "runtime": "@vercel/node@1.14.1"
     }
-  }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "methods": ["GET","POST","OPTIONS","HEAD"],
+      "dest": "/api/$1.js"
+    }
+  ]
 }
