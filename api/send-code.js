@@ -2,24 +2,46 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const codes = new Map();
+// ⚠️ FONTOS: Map nem jó Vercelen – globálisan elveszik cold startnál
+// De most működjön stabilan
+export const codes = global.codes || new Map();
+global.codes = codes;
+
+function setCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
 
 export default async function handler(req, res) {
-  // ✅ FULL CORS
-  res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCors(res);
 
-  // ✅ Preflight OK
+  // Preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+
+  // Teszteléshez: GET-et ne dobjon 500-at
+  if (req.method === 'GET') {
+    return res.status(200).json({ ok: true, message: "API is alive" });
   }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { email, locale } = req.body;
+  let body = req.body;
+
+  // Ha Vercel nem parse-olta
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      return res.status(400).json({ error: 'Invalid JSON' });
+    }
+  }
+
+  const { email, locale } = body || {};
 
   if (!email) {
     return res.status(400).json({ error: 'Missing email' });
@@ -40,23 +62,22 @@ export default async function handler(req, res) {
     subject = 'Jelszó visszaállító kód';
     title = 'Jelszó visszaállító kód';
     text = 'Használd az alábbi kódot:';
-  }
-  if (locale === 'sk') {
+  } else if (locale === 'sk') {
     subject = 'Kód na obnovenie hesla';
     title = 'Kód na obnovenie hesla';
     text = 'Použi nasledujúci kód:';
   }
 
   try {
-    const result = await resend.emails.send({
-      from: 'RR Vapes <onboarding@resend.dev>', // IDEIGLENES – működik biztosan
+    await resend.emails.send({
+      from: 'RR Vapes <no-reply@rrvapes.com>',
       to: email,
       subject,
       html: `
         <div style="font-family: Arial; text-align: center; padding: 30px;">
           <h2>${title}</h2>
           <p>${text}</p>
-          <div style="font-size: 32px; letter-spacing: 6px; font-weight: bold;">
+          <div style="font-size: 32px; letter-spacing: 6px; font-weight: bold; margin: 20px 0;">
             ${code}
           </div>
           <p>10 percig érvényes.</p>
@@ -64,9 +85,9 @@ export default async function handler(req, res) {
       `
     });
 
-    return res.status(200).json({ success: true, result });
+    return res.status(200).json({ success: true });
   } catch (err) {
     console.error('RESEND ERROR:', err);
-    return res.status(500).json({ error: 'Email send failed', details: err.message });
+    return res.status(500).json({ error: 'Email send failed' });
   }
 }
