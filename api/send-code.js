@@ -4,12 +4,13 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export const codes = new Map();
 
 export default async function handler(req, res) {
-  // ✅ CORS HEADERS – EZ HIÁNYZOTT NÁLAD
+
+  // ✅ Mindig addjuk vissza
   res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // ✅ Preflight
+  // ✅ Preflight kézfogás
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -40,6 +41,7 @@ export default async function handler(req, res) {
     title = 'Jelszó visszaállító kód';
     text = 'Használd az alábbi kódot:';
   }
+
   if (locale === 'sk') {
     subject = 'Kód na obnovenie hesla';
     title = 'Kód na obnovenie hesla';
@@ -48,14 +50,14 @@ export default async function handler(req, res) {
 
   try {
     await resend.emails.send({
-      from: 'RR Vapes <no-reply@rrvapes.com>',
+      from: 'RR Vapes <onboarding@resend.dev>',
       to: email,
       subject,
       html: `
         <div style="font-family: Arial; text-align: center; padding: 30px;">
           <h2>${title}</h2>
           <p>${text}</p>
-          <div style="font-size: 32px; letter-spacing: 6px; font-weight: bold; margin: 20px 0;">
+          <div style="font-size: 32px; letter-spacing: 6px; font-weight: bold;">
             ${code}
           </div>
           <p>10 percig érvényes.</p>
@@ -64,8 +66,9 @@ export default async function handler(req, res) {
     });
 
     return res.status(200).json({ success: true });
+
   } catch (err) {
-    console.error(err);
+    console.error('EMAIL ERROR:', err);
     return res.status(500).json({ error: 'Email send failed' });
   }
 }
