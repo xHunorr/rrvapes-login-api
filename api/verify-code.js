@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { codes } from './send-code';
 
 export default function handler(req, res) {
@@ -22,8 +23,13 @@ export default function handler(req, res) {
     return res.status(400).json({ success: false, message: 'Hibás kód' });
   }
 
-  // ha jó, töröljük
   codes.delete(email);
 
-  return res.status(200).json({ success: true });
+  // ✅ session token generálás
+  const token = crypto.randomBytes(32).toString('hex');
+
+  return res.status(200).json({
+    success: true,
+    token
+  });
 }
