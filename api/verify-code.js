@@ -1,9 +1,8 @@
 import { codes } from './send-code';
 
 export default function handler(req, res) {
-
   res.setHeader('Access-Control-Allow-Origin', 'https://rrvapes.com');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
@@ -32,5 +31,5 @@ export default function handler(req, res) {
 
   codes.delete(email);
 
-  res.status(200).json({ success: true });
+  return res.status(200).json({ success: true });
 }
