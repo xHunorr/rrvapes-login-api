@@ -2,18 +2,17 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// ⚠️ ideiglenes tárolás (később Redisre cseréljük)
+// ideiglenes memória
 const codes = new Map();
-
-export { codes };
 
 export default async function handler(req, res) {
 
-  // ✅ CORS – EZ LEGELSŐ!
+  // ✅ CORS HEADERS – EZ KELL LEGELŐRE
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // ✅ Preflight request
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -22,7 +21,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { email } = req.body;
+  let body = req.body;
+
+  // ✅ ha JSON stringként jön
+  if (typeof body === "string") {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      return res.status(400).json({ error: 'Invalid JSON' });
+    }
+  }
+
+  const { email } = body || {};
+
   if (!email) {
     return res.status(400).json({ error: 'Missing email' });
   }
@@ -40,18 +51,22 @@ export default async function handler(req, res) {
       to: email,
       subject: "Jelszó visszaállítási kód",
       html: `
-        <div style="font-family:Arial;text-align:center;padding:30px">
+        <div style="font-family:Arial,sans-serif;text-align:center;padding:30px;">
           <h2>Jelszó visszaállítási kód</h2>
-          <div style="font-size:32px;font-weight:bold;letter-spacing:6px">
+          <p>Az alábbi kódot használd:</p>
+          <div style="font-size:32px;letter-spacing:6px;font-weight:bold;margin:20px 0;">
             ${code}
           </div>
+          <p>Ez a kód 10 percig érvényes.</p>
         </div>
       `
     });
 
-    return res.status(200).json({ success: true });
+    res.status(200).json({ success: true });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: 'Email send failed' });
+    res.status(500).json({ error: 'Email send failed' });
   }
 }
+
+export { codes };
