@@ -1,18 +1,10 @@
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-// ideiglenes memória
-const codes = new Map();
+export const codes = new Map();
 
 export default async function handler(req, res) {
-
-  // ✅ CORS HEADERS – EZ KELL LEGELŐRE
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  // ✅ Preflight request
+  // Preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -21,18 +13,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let body = req.body;
-
-  // ✅ ha JSON stringként jön
-  if (typeof body === "string") {
-    try {
-      body = JSON.parse(body);
-    } catch {
-      return res.status(400).json({ error: 'Invalid JSON' });
-    }
-  }
-
-  const { email } = body || {};
+  const { email, locale } = req.body;
 
   if (!email) {
     return res.status(400).json({ error: 'Missing email' });
@@ -45,28 +26,41 @@ export default async function handler(req, res) {
     expires: Date.now() + 10 * 60 * 1000
   });
 
+  let subject = 'Password reset code';
+  let title = 'Password reset code';
+  let text = 'Use the code below:';
+
+  if (locale === 'hu') {
+    subject = 'Jelszó visszaállító kód';
+    title = 'Jelszó visszaállító kód';
+    text = 'Használd az alábbi kódot:';
+  }
+  if (locale === 'sk') {
+    subject = 'Kód na obnovenie hesla';
+    title = 'Kód na obnovenie hesla';
+    text = 'Použi nasledujúci kód:';
+  }
+
   try {
     await resend.emails.send({
-      from: "RR Vapes <no-reply@rrvapes.com>",
+      from: 'RR Vapes <no-reply@rrvapes.com>',
       to: email,
-      subject: "Jelszó visszaállítási kód",
+      subject,
       html: `
-        <div style="font-family:Arial,sans-serif;text-align:center;padding:30px;">
-          <h2>Jelszó visszaállítási kód</h2>
-          <p>Az alábbi kódot használd:</p>
-          <div style="font-size:32px;letter-spacing:6px;font-weight:bold;margin:20px 0;">
+        <div style="font-family: Arial; text-align: center; padding: 30px;">
+          <h2>${title}</h2>
+          <p>${text}</p>
+          <div style="font-size: 32px; letter-spacing: 6px; font-weight: bold; margin: 20px 0;">
             ${code}
           </div>
-          <p>Ez a kód 10 percig érvényes.</p>
+          <p>10 percig érvényes.</p>
         </div>
       `
     });
 
     res.status(200).json({ success: true });
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Email send failed' });
   }
 }
-
-export { codes };
