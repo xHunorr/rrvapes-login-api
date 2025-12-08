@@ -15,9 +15,15 @@ export default async function handler(req, res) {
   const { email, locale } = req.body || {};
   if (!email) return res.status(400).json({ success: false, message: "Email is required" });
 
-  // locale -> GraphQL LanguageCode
-  const map = { hu: "HU", sk: "SK", en: "EN" };
-  const lang = map[(locale || "").toLowerCase()] || "HU";
+  // ---- LOCALE MAP → GraphQL LanguageCode ----
+  const langMap = { hu: "HU", sk: "SK", en: "EN" };
+  const lang = langMap[(locale || "").toLowerCase()] || "HU";
+
+  // ---- LOCALE MAP → Accept-Language HEADER ----
+  const localeHeader =
+    locale === "en" ? "en-US" :
+    locale === "sk" ? "sk-SK" :
+    "hu-HU";
 
   try {
     const endpoint = `https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/${process.env.SHOPIFY_API_VERSION}/graphql.json`;
@@ -28,7 +34,7 @@ export default async function handler(req, res) {
       headers: {
         "Content-Type": "application/json",
         "X-Shopify-Storefront-Access-Token": token,
-        "Accept-Language": (locale || "hu").toLowerCase(),
+        "Accept-Language": localeHeader   // ← FIXED
       },
       body: JSON.stringify({
         query: `
@@ -47,27 +53,41 @@ export default async function handler(req, res) {
     console.log("🧾 Shopify raw:", text);
 
     let data;
-    try { data = JSON.parse(text); } catch (e) {
+    try { 
+      data = JSON.parse(text);
+    } catch {
       return res.status(502).json({ success: false, message: "Bad JSON from Shopify" });
     }
 
+    // --- Shopify top-level errors ---
     if (Array.isArray(data.errors) && data.errors.length) {
       const first = data.errors[0];
       if (first?.extensions?.code === "THROTTLED") {
         return res.status(429).json({
           success: false,
-          message: "Túl sok próbálkozás. Próbáld meg később újra.",
+          message: "Túl sok próbálkozás. Próbáld meg később újra."
         });
       }
-      return res.status(400).json({ success: false, message: first?.message || "Shopify error" });
+      return res.status(400).json({
+        success: false,
+        message: first?.message || "Shopify error"
+      });
     }
 
+    // --- User errors ---
     const userErrors = data?.data?.customerRecover?.userErrors || [];
     if (userErrors.length) {
-      return res.status(400).json({ success: false, message: userErrors[0].message });
+      return res.status(400).json({
+        success: false,
+        message: userErrors[0].message
+      });
     }
 
-    return res.status(200).json({ success: true, message: "Password recovery email sent" });
+    return res.status(200).json({
+      success: true,
+      message: "Password recovery email sent"
+    });
+
   } catch (err) {
     console.error("❌ Recover error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
