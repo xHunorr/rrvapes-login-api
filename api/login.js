@@ -72,39 +72,6 @@ export default async function handler(req, res) {
         .json({ error: errors[0]?.message || "Hibás e-mail vagy jelszó." });
     }
 
-    
-        // LOCALE UPDATE: ITT!!!
-    if (locale) {
-      try {
-        await fetch(`https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Shopify-Storefront-Access-Token": process.env.SHOPIFY_STOREFRONT_TOKEN
-          },
-          body: JSON.stringify({
-            query: `
-              mutation customerUpdate($customerAccessToken: String!, $customer: CustomerUpdateInput!) {
-                customerUpdate(customerAccessToken: $customerAccessToken, customer: $customer) {
-                  customer { locale }
-                  userErrors { field message }
-                }
-              }
-            `,
-            variables: {
-              customerAccessToken: token,
-              customer: {
-                locale: locale.toUpperCase() // "en" → "EN"
-              }
-            }
-          })
-        });
-      } catch (e) {
-        console.error("🔥 Locale update failed:", e);
-      }
-    }
-
-    
     // Siker
     return res.status(200).json({
       success: true,
