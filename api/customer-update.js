@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       if (!msg || msg.toLowerCase().includes("unidentified")) {
         msg = "Hibásan adtad meg a jelenlegi jelszót.";
       }
-      return res.status(401).json({ error: msg });
+      return res.status(401).json({ error: "AUTH_ERROR: " + msg });
     }
 
     // 2) customerUpdate a friss tokennel
