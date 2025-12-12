@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     const { token } = req.body || {};
     if (!token) return res.status(400).json({ error: "Missing token." });
 
+    // Shopify query
     const resp = await fetch(`https://${process.env.SHOPIFY_STOREFRONT_DOMAIN}/api/2024-07/graphql.json`, {
       method: "POST",
       headers: {
@@ -43,7 +44,11 @@ export default async function handler(req, res) {
               firstName
               lastName
               email
-              acceptsMarketing
+
+              defaultAddress {
+                id
+              }
+
               orders(first: 20, reverse: true) {
                 edges {
                   node {
@@ -55,26 +60,16 @@ export default async function handler(req, res) {
                     fulfillmentStatus
                     totalPriceV2 { amount currencyCode }
                     customerUrl
-
-                    # 🔥 itt a bővítés:
                     lineItems(first: 20) {
                       edges {
                         node {
                           title
                           quantity
-                          originalTotalPrice {
-                            amount
-                            currencyCode
-                          }
+                          originalTotalPrice { amount currencyCode }
                           variant {
                             title
-                            image {
-                              url
-                            }
-                            priceV2 {
-                              amount
-                              currencyCode
-                            }
+                            image { url }
+                            priceV2 { amount currencyCode }
                           }
                         }
                       }
@@ -82,6 +77,7 @@ export default async function handler(req, res) {
                   }
                 }
               }
+
               addresses(first: 10) {
                 edges {
                   node {
@@ -109,7 +105,40 @@ export default async function handler(req, res) {
     const customer = data?.data?.customer || null;
     if (!customer) return res.status(401).json({ error: "Invalid or expired token." });
 
-    return res.status(200).json({ success: true, customer });
+    // --- 🔥 FIX: Címek átalakítása ---
+    const formattedAddresses = customer.addresses.edges.map(e => {
+      const fullId = e.node.id; // gid://shopify/CustomerAddress/xxx
+      const shortId = fullId.replace("gid://shopify/CustomerAddress/", "");
+
+      return {
+        originalId: fullId,
+        id: shortId,
+
+        firstName: e.node.firstName,
+        lastName: e.node.lastName,
+        address1: e.node.address1,
+        address2: e.node.address2,
+        city: e.node.city,
+        zip: e.node.zip,
+        country: e.node.country,
+        phone: e.node.phone,
+        formatted: e.node.formatted
+      };
+    });
+
+    // Default address rövid ID formában
+    const defaultAddressId = customer.defaultAddress?.id
+      ?.replace("gid://shopify/CustomerAddress/", "");
+
+    // Új, frontend-barát customer objektum
+    const fixedCustomer = {
+      ...customer,
+      addresses: formattedAddresses,
+      defaultAddressId
+    };
+
+    return res.status(200).json({ success: true, customer: fixedCustomer });
+
   } catch (e) {
     console.error("ME API error:", e);
     return res.status(500).json({ error: "Server error." });
